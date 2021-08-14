@@ -1,0 +1,6 @@
+*.o
+main
+table.h
+table.inc
+setter_out
+utils/num_setter/num_setter
