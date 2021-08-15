@@ -35,22 +35,28 @@ class Register(Enum):
 class ArgType(Enum):
     INT  = 0
     ADDR = 1
+    VOID = 2
 
     def strType(self):
         if self is ArgType.INT:
             return "long"
-        else:
+        elif self is ArgType.ADDR:
             return "void*"
+        else:
+            return "void"
 
 class CmdType(Enum):
     SYSCALL = 0
     PROC    = 1
+    REGS    = 2
 
     def strType(self):
         if self is CmdType.SYSCALL:
             return "CMD_SYSCALL"
-        else:
+        elif self is CmdType.PROC:
             return "CMD_PROC"
+        else:
+            return "CMD_REGS"
 
 def Syscall(title, argsTypes, retType):
     return Command(CmdType.SYSCALL, title, argsTypes, retType)
@@ -58,15 +64,23 @@ def Syscall(title, argsTypes, retType):
 def Proc(title, argsTypes, retType):
     return Command(CmdType.PROC, title, argsTypes, retType)
 
+def Regs(title, argsTypes=[]):
+    return Command(CmdType.REGS, title, argsTypes, ArgType.VOID)
+
 class Command:
     def __init__(self, cmdType, title, argsTypes, retType):
         self.title = title
         self.cmdType = cmdType
         self.numArgs = len(argsTypes)
-        self.args = list(Register)
-        random.shuffle(self.args)
-        self.args = self.args[:self.numArgs]
-        self.argsTypes = argsTypes
+
+        if cmdType is not CmdType.REGS:
+            self.args = list(Register)
+            random.shuffle(self.args)
+            self.args = self.args[:self.numArgs]
+            self.argsTypes = argsTypes
+        else:
+            self.args, self.argsTypes = list(zip(*argsTypes))
+
         self.retType = retType
         self.number = None
 
@@ -79,7 +93,8 @@ class Command:
         argsDef = ", ".join(argsDef)
 
         yield f"static inline {self.retType.strType()} nano_{self.title}({argsDef}) {{"
-        yield  "    long ret;"
+        if self.retType is not ArgType.VOID:
+            yield  "    long ret;"
 
         specialRegs = [Register.R10, Register.R8, Register.R9]
         for r in specialRegs:
@@ -92,7 +107,11 @@ class Command:
         yield f"    __asm__ __volatile__ (\"int3\\n\\t\"{colon}"
         if not secondPass:
             yield  "                          \"nano_syscall_%=:\\n\\t\" :"
-        yield  "                          \"=a\"(ret) :"
+
+        if self.retType is not ArgType.VOID:
+            yield  "                          \"=a\"(ret) :"
+        else:
+            yield  "                                      :"
 
         argList = ["\"a\"({})".format("num" if secondPass else 1)]
 
@@ -105,7 +124,8 @@ class Command:
         yield argList
         yield  "                          \"rcx\", \"r11\", \"memory\");"
 
-        yield f"    return ({self.retType.strType()})ret;"
+        if self.retType is not ArgType.VOID:
+            yield f"    return ({self.retType.strType()})ret;"
         yield "}"
 
     def tableEntries(self):
@@ -114,12 +134,15 @@ class Command:
         argsStr = "{" + ','.join(argsStr) + "}"
 
         yield f"{{.type = {self.cmdType.strType()},"
-        if self.cmdType is CmdType.SYSCALL:
-            yield f" .number = {self.number},"
+        if self.cmdType is not CmdType.REGS:
+            if self.cmdType is CmdType.SYSCALL:
+                yield f" .number = {self.number},"
+            elif self.cmdType is CmdType.PROC:
+                yield f" .proc_func = {self.title},"
+            yield f" .num_args = {self.numArgs},"
+            yield f" .args_offsets = {argsStr}"
         else:
-            yield f" .proc_func = {self.title},"
-        yield f" .num_args = {self.numArgs},"
-        yield f" .args_offsets = {argsStr}"
+            yield f" .regs_proc = {self.title}"
         yield "},"
 
 class TableGen:
@@ -154,18 +177,27 @@ class TableGen:
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/user.h>
 
 #define CMD_SYSCALL 1337
 #define CMD_PROC    1338
+#define CMD_REGS    1339
+
+typedef bool (*cmd_regs_proc)(struct user_regs_struct*);
 
 typedef struct {
     uint32_t type;
-    uint16_t num_args;
-    uint16_t args_offsets[6];
     union {
-        uint16_t number;
-        void     *proc_func;
+        struct {
+            uint16_t num_args;
+            uint16_t args_offsets[6];
+            union {
+                uint16_t number;
+                void     *proc_func;
+            };
+        };
+        cmd_regs_proc regs_proc;
     };
 } cmd_entry;
 
