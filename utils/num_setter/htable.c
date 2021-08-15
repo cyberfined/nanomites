@@ -6,17 +6,17 @@
 
 static size_t primes[] = {13, 31, 61, 103, 229, 523, 1093, 2239, 4519, 9043, 18121, 36343, 72673, 145513, 291043, 582139, 1164433};
 
-uint32_t default_hash_func(const uint8_t *key, size_t length) {
-    size_t i = 0;
-    uint32_t hash = 0;
-    while (i != length) {
-        hash += key[i++];
-        hash += hash << 10;
-        hash ^= hash >> 6;
+uint32_t default_hash_func(const uint8_t *key, size_t len) {
+    uint32_t hash, i;
+    for(hash = i = 0; i < len; ++i)
+    {
+        hash += key[i];
+        hash += (hash << 10);
+        hash ^= (hash >> 6);
     }
-    hash += hash << 3;
-    hash ^= hash >> 11;
-    hash += hash << 15;
+    hash += (hash << 3);
+    hash ^= (hash >> 11);
+    hash += (hash << 15);
     return hash;
 }
 

@@ -84,12 +84,10 @@ class Command:
         self.retType = retType
         self.number = None
 
-    def inlineFunc(self, secondPass=False):
+    def inlineFunc(self):
         argsList = ', '.join([f"(long)a{a.order()}" for a in self.args])
 
         argsDef = [f"{t.strType()} a{i}" for i, t in enumerate(self.argsTypes)]
-        if secondPass:
-            argsDef.insert(0, "long num")
         argsDef = ", ".join(argsDef)
 
         yield f"static inline {self.retType.strType()} nano_{self.title}({argsDef}) {{"
@@ -103,17 +101,14 @@ class Command:
                 continue
             yield f"    register long {r} __asm__(\"{r}\") = (long)a{idx};"
 
-        colon = " :" if secondPass else ""
-        yield f"    __asm__ __volatile__ (\"int3\\n\\t\"{colon}"
-        if not secondPass:
-            yield  "                          \"nano_syscall_%=:\\n\\t\" :"
-
+        colon = " :" if self.retType is not ArgType.VOID else " ::"
+        yield f"    __asm__ __volatile__ (\"mov $0xdeadbeef, %eax\\n\\t\");"
+        yield f"    __asm__ __volatile__ (\"int3\\n\\t\""
+        yield f"                          \"nano_{self.title}_%=:\\n\\t\"{colon}"
         if self.retType is not ArgType.VOID:
             yield  "                          \"=a\"(ret) :"
-        else:
-            yield  "                                      :"
 
-        argList = ["\"a\"({})".format("num" if secondPass else 1)]
+        argList = []
 
         for idx, arg in enumerate(self.args):
             if arg in specialRegs:
@@ -184,7 +179,7 @@ class TableGen:
 #define CMD_PROC    1338
 #define CMD_REGS    1339
 
-typedef bool (*cmd_regs_proc)(struct user_regs_struct*);
+typedef void (*cmd_regs_proc)(struct user_regs_struct*);
 
 typedef struct {
     uint32_t type;
@@ -202,23 +197,18 @@ typedef struct {
 } cmd_entry;
 
 extern cmd_entry cmd_table[];
+extern uint16_t fun_args_offsets[];
 """
         return '\n'.join([header, self.generateMacro(), self.generateFuncs()])
 
     def generateFuncs(self):
-        lines = ["#ifndef SECOND_PASS"]
+        lines = []
         for idx, cmd in enumerate(self.commands):
             for line in cmd.inlineFunc():
                 lines.append(line)
             if idx != len(self.commands)-1:
                 lines.append("")
-        lines.append("#else")
-        for idx, cmd in enumerate(self.commands):
-            for line in cmd.inlineFunc(True):
-                lines.append(line)
-            if idx != len(self.commands)-1:
-                lines.append("")
-        lines.append("#endif\n")
+        lines.append("")
         return '\n'.join(lines)
 
     def generateMacro(self):
@@ -227,11 +217,16 @@ extern cmd_entry cmd_table[];
         for idx, cmd in enumerate(self.commands):
             spaces = ' ' * (maxTitleLen - len(cmd.title) + 1)
             lines.append(f"#define NANO_{cmd.title.upper()}_OFFSET{spaces}{idx}")
+        spaces = ' ' * (maxTitleLen + 2)
+        lines.append(f"#define NUM_ENTRIES{spaces}{len(self.commands)}")
         lines.append("")
         return '\n'.join(lines)
 
     def generateTable(self):
-        table = ["cmd_entry cmd_table[] = {"]
+        offsets = ", ".join([hex(r.value) for r in Register])
+        table = [f"uint16_t fun_args_offsets[] = {{{offsets}}};"]
+        table.append("")
+        table.append("cmd_entry cmd_table[] = {")
         for cmd in self.commands:
             for entry in cmd.tableEntries():
                 table.append("    " + entry)
