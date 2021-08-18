@@ -9,6 +9,7 @@
 #include <sys/ptrace.h>
 
 #include "table.h"
+#include "debug.h"
 
 static struct user_regs_struct regs;
 
@@ -54,18 +55,20 @@ static inline void call_interpreter(pid_t pid) {
     long backup = 0, code = 0;
 
     for(;;) {
-        if(ptrace(PTRACE_CONT, pid, NULL, NULL) < 0)
+        if(ptrace_d(PTRACE_CONT, pid, NULL, NULL) < 0)
             break;
         wait(NULL);
 
-        if(ptrace(PTRACE_GETREGS, pid, NULL, &regs) < 0)
+        if(ptrace_d(PTRACE_GETREGS, pid, NULL, &regs) < 0)
             break;
         unsigned long long rip_bak = regs.rip;
 
-        int entry_id = addr_hash(regs.rip) % NUM_ENTRIES + (long long)regs.rax;
+        //int entry_id = addr_hash(regs.rip) % NUM_ENTRIES + (long long)regs.rax;
+        int entry_id = regs.rax;
         cmd_entry *entry = &cmd_table[entry_id];
         if(entry->type == CMD_SYSCALL || entry->type == CMD_PROC) {
             prepare_regs(entry);
+            print_nanocall_info(pid, entry, &regs);
 
             if(entry->type == CMD_SYSCALL) {
                 code = *(long*)syscall_code;
@@ -78,31 +81,31 @@ static inline void call_interpreter(pid_t pid) {
             entry->regs_proc(&regs);
         }
 
-        if(ptrace(PTRACE_SETREGS, pid, NULL, &regs) < 0)
+        if(ptrace_d(PTRACE_SETREGS, pid, NULL, &regs) < 0)
             break;
 
         if(entry->type != CMD_REGS) {
-            backup = ptrace(PTRACE_PEEKTEXT, pid, (void*)regs.rip, NULL);
+            backup = ptrace_d(PTRACE_PEEKTEXT, pid, (void*)regs.rip, NULL);
             if(backup < 0 && errno)
                 break;
-            if(ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)code) < 0)
+            if(ptrace_d(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)code) < 0)
                 break;
         }
 
-        if(ptrace(PTRACE_CONT, pid, NULL, NULL) < 0)
+        if(ptrace_d(PTRACE_CONT, pid, NULL, NULL) < 0)
             break;
         wait(NULL);
 
         if(entry->type == CMD_REGS)
             continue;
 
-        if(ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)backup) < 0)
+        if(ptrace_d(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)backup) < 0)
             break;
-        if(ptrace(PTRACE_GETREGS, pid, NULL, &regs) < 0)
+        if(ptrace_d(PTRACE_GETREGS, pid, NULL, &regs) < 0)
             break;
         reset_regs(entry);
         regs.rip = rip_bak;
-        if(ptrace(PTRACE_SETREGS, pid, NULL, &regs) < 0)
+        if(ptrace_d(PTRACE_SETREGS, pid, NULL, &regs) < 0)
             break;
     }
 }
@@ -110,6 +113,8 @@ static inline void call_interpreter(pid_t pid) {
 static inline void int3() {
     __asm__ __volatile__ ("int3");
 }
+
+static char test_buf[128];
 
 int main() {
     pid_t pid = fork();
@@ -132,21 +137,22 @@ int main() {
     }
 
     // children
-    if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
+    if(ptrace_d(PTRACE_TRACEME, 0, NULL, NULL) < 0)
         return EXIT_FAILURE;
     int3();
 
     pid_t parent = getppid();
-    if(ptrace(PTRACE_SEIZE, parent, NULL, NULL) < 0)
+    if(ptrace_d(PTRACE_SEIZE, parent, NULL, NULL) < 0)
         return EXIT_FAILURE;
 
-    char test_buf[128];
     nano_write(1, "What's your name?\n", 18);
     int len = nano_read(0, test_buf, sizeof(test_buf));
-    nano_write(1, "Hello, ", 7);
+    test_buf[len] = 0;
+    nano_write(1, "Hello, \n", 8);
+    //printf("%s\n", test_buf);
     nano_write(1, test_buf, len);
 
-    long res = nano_someproc(20);
-    // TODO: printf with nano_write inside
-    printf("someproc: %li\n", res);
+    //long res = nano_someproc(20);
+    //// TODO: printf with nano_write inside
+    //printf("someproc: %li\n", res);
 }

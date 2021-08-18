@@ -1,12 +1,12 @@
 CC=musl-gcc
-CFLAGS=-std=c11 -Wall -O3 -D_DEFAULT_SOURCE
+CFLAGS=-std=c11 -Wall -O3 -D_DEFAULT_SOURCE -DNDEBUG
 LDFLAGS=-static
 
 NUM_SETTER_DIR=utils/num_setter
 NUM_SETTER=$(NUM_SETTER_DIR)/num_setter
 GEN_TABLE=utils/gen_table/gen_table.py
 
-SRC=main.c table.c
+SRC=main.c table.c debug.c
 OBJ=$(patsubst %.c, %.o, $(SRC))
 TARGET=main
 PATCHED_TARGET=crackme
