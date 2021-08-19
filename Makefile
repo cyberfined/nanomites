@@ -1,5 +1,5 @@
 CC=musl-gcc
-CFLAGS=-std=c11 -Wall -O3 -D_DEFAULT_SOURCE -DNDEBUG
+CFLAGS=-std=c11 -Wall -O2 -D_DEFAULT_SOURCE -DNDEBUG
 LDFLAGS=-static
 
 NUM_SETTER_DIR=utils/num_setter

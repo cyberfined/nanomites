@@ -8,29 +8,6 @@
 #include <errno.h>
 #include <stdbool.h>
 
-static inline char* ptrace_type(long request) {
-    switch(request) {
-    case PTRACE_ATTACH:
-        return "PTRACE_ATTACH";
-    case PTRACE_TRACEME:
-        return "PTRACE_TRACEME";
-    case PTRACE_SETREGS:
-        return "PTRACE_SETREGS";
-    case PTRACE_GETREGS:
-        return "PTRACE_GETREGS";
-    case PTRACE_CONT:
-        return "PTRACE_CONT";
-    case PTRACE_PEEKTEXT:
-        return "PTRACE_PEEKTEXT";
-    case PTRACE_POKETEXT:
-        return "PTRACE_POKETEXT";
-    case PTRACE_SEIZE:
-        return "PTRACE_SEIZE";
-    default:
-        return "PTRACE_UNKNOWN";
-    }
-}
-
 static char buf[1024] = {0};
 
 static bool ptrace_read(pid_t pid, char *dst, void *src, size_t size) {
@@ -64,7 +41,7 @@ static char* ptrace_read_str(pid_t pid, void *src, size_t size) {
 long _ptrace_d(const char *line, long request, pid_t pid, void *addr, void *data) {
     long res = ptrace(request, pid, addr, data);
     if(res < 0 && errno) {
-        fprintf(stderr, "[%s] %s: %s\n", line, ptrace_type(request), strerror(errno));
+        fprintf(stderr, "%s: %s\n", line, strerror(errno));
         exit(EXIT_FAILURE);
     }
     return res;
@@ -139,5 +116,20 @@ void print_nanocall_info(pid_t pid, cmd_entry *entry, struct user_regs_struct *r
             fputs(", ", stdout);
     }
     fputs(")\n", stdout);
+}
+
+void print_regs(struct user_regs_struct *regs) {
+    printf("rdi: 0x%08lx\n"
+           "rsi: 0x%08lx\n"
+           "rdx: 0x%08lx\n"
+           "r10: 0x%08lx\n"
+           "r8:  0x%08lx\n"
+           "r9:  0x%08lx\n",
+           regs->rdi,
+           regs->rsi,
+           regs->rdx,
+           regs->r10,
+           regs->r8,
+           regs->r9);
 }
 #endif

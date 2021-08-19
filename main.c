@@ -17,6 +17,8 @@ static const uint8_t syscall_code[] = {0x0f, 0x05, 0xcc, 0x00, 0x00, 0x00, 0x00,
 
 static uint8_t call_code[] = {0xe8, 0x00, 0x00, 0x00, 0x00, 0xcc, 0x00, 0x00};
 
+static long long regs_bak[6];
+
 static inline uint32_t addr_hash(long addr) {
     uint32_t hash = 0;
     const uint8_t *key = (uint8_t*)&addr;
@@ -36,19 +38,18 @@ static inline void prepare_regs(cmd_entry *entry) {
     long long src[6];
     for(int i = 0; i < entry->num_args; i++)
         src[i] = *(long long*)(args + entry->args_offsets[i]);
-    for(int i = 0; i < entry->num_args; i++)
+    for(int i = 0; i < entry->num_args; i++) {
+        regs_bak[i] = *(long long*)(args + fun_args_offsets[i]);
         *(long long*)(args + fun_args_offsets[i]) = src[i];
+    }
     if(entry->type == CMD_SYSCALL)
         regs.rax = entry->number;
 }
 
 static inline void reset_regs(cmd_entry *entry) {
     void *args = &regs;
-    long long src[6];
     for(int i = 0; i < entry->num_args; i++)
-        src[i] = *(long long*)(args + fun_args_offsets[i]);
-    for(int i = 0; i < entry->num_args; i++)
-        *(long long*)(args + entry->args_offsets[i]) = src[i];
+        *(long long*)(args + fun_args_offsets[i]) = regs_bak[i];
 }
 
 static inline void call_interpreter(pid_t pid) {
@@ -62,12 +63,16 @@ static inline void call_interpreter(pid_t pid) {
         if(ptrace_d(PTRACE_GETREGS, pid, NULL, &regs) < 0)
             break;
         unsigned long long rip_bak = regs.rip;
+        Dprintf("\nstarted\n");
+        print_regs(&regs);
 
         //int entry_id = addr_hash(regs.rip) % NUM_ENTRIES + (long long)regs.rax;
         int entry_id = regs.rax;
         cmd_entry *entry = &cmd_table[entry_id];
         if(entry->type == CMD_SYSCALL || entry->type == CMD_PROC) {
             prepare_regs(entry);
+            Dprintf("\nprepared\n");
+            print_regs(&regs);
             print_nanocall_info(pid, entry, &regs);
 
             if(entry->type == CMD_SYSCALL) {
@@ -104,6 +109,9 @@ static inline void call_interpreter(pid_t pid) {
         if(ptrace_d(PTRACE_GETREGS, pid, NULL, &regs) < 0)
             break;
         reset_regs(entry);
+
+        Dprintf("\nreseted\n");
+        print_regs(&regs);
         regs.rip = rip_bak;
         if(ptrace_d(PTRACE_SETREGS, pid, NULL, &regs) < 0)
             break;
@@ -148,8 +156,7 @@ int main() {
     nano_write(1, "What's your name?\n", 18);
     int len = nano_read(0, test_buf, sizeof(test_buf));
     test_buf[len] = 0;
-    nano_write(1, "Hello, \n", 8);
-    //printf("%s\n", test_buf);
+    nano_write(1, "Hello, ", 7);
     nano_write(1, test_buf, len);
 
     //long res = nano_someproc(20);
