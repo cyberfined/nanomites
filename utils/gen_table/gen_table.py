@@ -102,7 +102,7 @@ class Command:
             yield f"    register long {r} __asm__(\"{r}\") = (long)a{idx};"
 
         colon = " :" if self.retType is not ArgType.VOID else " ::"
-        yield f"    __asm__ __volatile__ (\"int3\\n\\t\""
+        yield f"    __asm__ __volatile__ (\"syscall\\n\\t\""
         yield f"                          \"nano_{self.title}_%=:\\n\\t\"{colon}"
         if self.retType is not ArgType.VOID:
             yield  "                          \"=a\"(ret) :"
