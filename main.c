@@ -19,20 +19,6 @@ static uint8_t call_code[] = {0xe8, 0x00, 0x00, 0x00, 0x00, 0xcc, 0x00, 0x00};
 
 static long long regs_bak[6];
 
-static inline uint32_t addr_hash(long addr) {
-    uint32_t hash = 0;
-    const uint8_t *key = (uint8_t*)&addr;
-    for(uint32_t i = 0; i < sizeof(addr); i++) {
-        hash += key[i];
-        hash += (hash << 10);
-        hash ^= (hash >> 6);
-    }
-    hash += (hash << 3);
-    hash ^= (hash >> 11);
-    hash += (hash << 15);
-    return hash;
-}
-
 static inline void prepare_regs(cmd_entry *entry) {
     void *args = &regs;
     long long src[6];
@@ -66,9 +52,12 @@ static inline void call_interpreter(pid_t pid) {
         Dprintf("\nstarted\n");
         print_regs(&regs);
 
-        //int entry_id = addr_hash(regs.rip) % NUM_ENTRIES + (long long)regs.rax;
-        int entry_id = regs.rax;
-        cmd_entry *entry = &cmd_table[entry_id];
+        cmd_entry *entry = nano_lookup(regs.rip);
+        if(!entry) {
+            Dprintf("Failed to find nanocall for %p address\n", (void*)regs.rip);
+            break;
+        }
+
         if(entry->type == CMD_SYSCALL || entry->type == CMD_PROC) {
             prepare_regs(entry);
             Dprintf("\nprepared\n");

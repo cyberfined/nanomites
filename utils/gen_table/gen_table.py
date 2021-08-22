@@ -107,7 +107,7 @@ class Command:
         if self.retType is not ArgType.VOID:
             yield  "                          \"=a\"(ret) :"
 
-        argList = [f"\"a\"(NANO_{self.title.upper()}_OFFSET)"]
+        argList = []
 
         for idx, arg in enumerate(self.args):
             if arg in specialRegs:
@@ -171,6 +171,7 @@ class TableGen:
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 #include <sys/user.h>
 
@@ -195,8 +196,48 @@ typedef struct {
     };
 } cmd_entry;
 
+typedef struct {
+    long long addr;
+    void      *nanocall;
+} nanocall_node;
+
 extern cmd_entry cmd_table[];
 extern uint16_t fun_args_offsets[];
+extern nanocall_node nanocalls_table[31];
+
+static inline uint32_t jenkins_hash_func(long long addr) {
+    size_t i = 0;
+    uint32_t hash = 0;
+    uint8_t *key = (uint8_t*)&addr;
+    while (i != sizeof(addr)) {
+        hash += key[i++];
+        hash += hash << 10;
+        hash ^= hash >> 6;
+    }
+    hash += hash << 3;
+    hash ^= hash >> 11;
+    hash += hash << 15;
+    return hash;
+}
+
+static inline void* nano_lookup(long long addr) {
+    uint32_t hash = jenkins_hash_func(addr);
+    int cur = hash % (sizeof(nanocalls_table)/sizeof(*nanocalls_table));
+    int step = hash % (sizeof(nanocalls_table)/sizeof(*nanocalls_table) - 2) + 1;
+    int nstep = step;
+
+    for(size_t i = 0; i < sizeof(nanocalls_table)/sizeof(*nanocalls_table); i++) {
+        nanocall_node *cur_node = &nanocalls_table[cur];
+        if(!cur_node->addr)
+            break;
+        if(cur_node->addr == addr)
+            return cur_node->nanocall;
+        cur = (hash + nstep) % (sizeof(nanocalls_table)/sizeof(*nanocalls_table));
+        nstep += step;
+    }
+
+    return NULL;
+}
 """
         return '\n'.join([header, self.generateMacro(), self.generateFuncs()])
 
@@ -229,6 +270,9 @@ extern uint16_t fun_args_offsets[];
         for cmd in self.commands:
             for entry in cmd.tableEntries():
                 table.append("    " + entry)
+        table.append("};\n")
+        table.append("nanocall_node nanocalls_table[31] = {")
+        table.append("    {.addr = 0x1, .nanocall = (void*)0x1}")
         table.append("};\n")
         return '\n'.join(table)
 

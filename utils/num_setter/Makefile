@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-std=c11 -Wall -O3 -D_DEFAULT_SOURCE
 LDFLAGS=
-SRC=main.c file_map.c htable.c offset_table.c elf_parser.c offset_parser.c
+SRC=main.c file_map.c htable.c offset_table.c offset_parser.c nanocalls_table.c
 OBJ=$(patsubst %.c, %.o, $(SRC))
 TARGET=num_setter
 
