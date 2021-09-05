@@ -1,4 +1,5 @@
 *.o
+*.pyc
 main
 crackme
 table.h
