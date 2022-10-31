@@ -21,7 +21,7 @@ UFixed32 = UFixedType(ctypes.c_uint32, "uint32_t")
 
 class UFixed:
     def __init__(self, cons, value):
-        self._value = cons(value)
+        self._value = cons(value) if type(value) is int else cons(value.value)
         self.size = ctypes.sizeof(self._value)
         self.cons = cons
 
