@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 from round_key import RoundKey
-from expr import *
-from fixed import UFixed32
 from expr_gen import ExprGen, Unique
 from code_gen import CodeGen
 from tests import runTests
-from enum import Enum, auto
 import sys
 import random
 import argparse

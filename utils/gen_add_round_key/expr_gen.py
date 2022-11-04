@@ -44,7 +44,7 @@ class ExprGen:
             self.resetState()
             self.setRound(curEq)
             self.root.calc(self.defs)
-            for i in range(4):
+            for i in range(len(self.state)):
                 if randBool():
                     # const
                     expr, val = self.xorToDest(curEq, i)
