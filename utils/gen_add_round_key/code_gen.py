@@ -20,7 +20,7 @@ static inline uint32_t guard(uint32_t n) {
 }
 """
         code = [guardCode]
-        code.append("static inline void add_round_key(state_t _state, uint32_t round) {")
+        code.append("static inline void add_round_key(state_t _state, uint32_t round, uint64_t address) {")
         code.append("    uint32_t *state = (uint32_t*)_state;")
 
         for expr in self.root.value:

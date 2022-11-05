@@ -188,3 +188,5 @@ def guard(x):
     return Expr(ExprType.GUARD, left = x)
 
 round = var("round")
+
+address = var("address")

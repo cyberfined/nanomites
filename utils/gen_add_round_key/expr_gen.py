@@ -16,22 +16,35 @@ class Unique:
         return cur
 
 class ExprGen:
-    def __init__(self, key, uniq, order):
-        self.key = key
+    NUM_ROUNDS = 15
+
+    def __init__(self, keys, uniq, state):
+        self.keys = keys
         self.uniq = uniq
-        self.order = order
         self.defs = {}
-        self.state = list(map(UFixed32, [0xa749220, 0xbe93bfa6, 0x852f3eee, 0xde9a4ae0]))
+        self.state = list(map(UFixed32, state))
         self.shftVar = e.var("shft")
-        self.guardVars = []
+        self.roundGuardVars = []
+        self.addrGuardVars = {}
         self.root = Expr(ExprType.ROOT, value = [])
 
     def generate(self):
-        for i in range(15):
+        for i in range(ExprGen.NUM_ROUNDS):
             var = self.newVar()
             expr = e.define(var, e.xor(e.round, e.const(UFixed32(i))))
             self.seq(expr)
-            self.guardVars.append(var)
+            self.roundGuardVars.append(var)
+
+        for key in self.keys:
+            var = self.newVar()
+            expr = e.define(
+                var,
+                e.xor(e.address, e.const(UFixed64(key.address))),
+                UFixed64
+            )
+            self.seq(expr)
+            self.addrGuardVars[key.address] = var
+
         self.seq(e.define(self.shftVar, e.const(UFixed64(0)), UFixed64))
 
         for i in range(4):
@@ -39,6 +52,17 @@ class ExprGen:
             xorConst = UFixed32(random.randrange(0x01000000, 0xffffffff))
             expr = e.xoreq(state, e.const(xorConst))
             self.seq(expr)
+
+        for keyIdx in range(len(self.keys)):
+            self.generateForKey(keyIdx)
+
+        return self.root
+
+    def generateForKey(self, keyIdx):
+        self.key = self.keys[keyIdx]
+        self.order = list(range(ExprGen.NUM_ROUNDS))
+        random.shuffle(self.order)
+        self.setAddress(UFixed64(self.key.address))
 
         for eqIdx, curEq in enumerate(map(UFixed32, self.order)):
             self.resetState()
@@ -55,7 +79,9 @@ class ExprGen:
                         expr, val = self.xorToDest(i)
                 self.setCurState(i, val)
 
-                rightExpr = expr if eqIdx == 0 else self.generateGuard(eqIdx, expr)
+                rightExpr = expr if eqIdx == 0 else self.generateRoundGuard(eqIdx, expr)
+                if keyIdx != 0:
+                    rightExpr = self.generateAddrGuard(keyIdx, rightExpr)
                 state = self.stateExpr(i)
                 expr = e.xoreq(state, rightExpr)
                 self.seq(expr)
@@ -71,14 +97,28 @@ class ExprGen:
     def stateExpr(self, i):
         return e.var(f"state[{i}]")
 
-    def generateGuard(self, eqIdx, expr):
+    def generateRoundGuard(self, eqIdx, expr):
         guard = None
         for i in range(eqIdx, len(self.order)):
-            var = self.guardVars[self.order[i]]
+            var = self.roundGuardVars[self.order[i]]
             guard = var if guard is None else e.mul(guard, var)
         if guard is not None:
             cons = random.choice([e.rshifteq, e.lshifteq])
-            self.seq(e.assign(self.shftVar, expr))
+            if expr != self.shftVar:
+                self.seq(e.assign(self.shftVar, expr))
+            self.seq(cons(self.shftVar, e.guard(guard)))
+            return self.shftVar
+
+    def generateAddrGuard(self, keyIdx, expr):
+        guard = None
+        for i in range(keyIdx, len(self.keys)):
+            var = self.addrGuardVars[self.keys[keyIdx].address]
+            guard = var if guard is None else e.mul(guard, var)
+        if guard is not None:
+            #cons = random.choice([e.rshifteq, e.lshifteq])
+            cons = e.lshifteq
+            if expr != self.shftVar:
+                self.seq(e.assign(self.shftVar, expr))
             self.seq(cons(self.shftVar, e.guard(guard)))
             return self.shftVar
 
@@ -92,6 +132,9 @@ class ExprGen:
 
     def getRound(self):
         return self.defs["round"].value
+
+    def setAddress(self, address):
+        self.defs["address"] = e.Var(intType = UFixed32, value = address)
 
     def setCurState(self, i, val):
         self.defs["state[%d]" % i] = e.Var(intType = UFixed32, value = val)
