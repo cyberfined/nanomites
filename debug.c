@@ -1,29 +1,21 @@
 #include "debug.h"
 
 #ifdef NDEBUG
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <assert.h>
-#include <errno.h>
-#include <stdbool.h>
 
 static char buf[1024] = {0};
 
-static bool ptrace_read(pid_t pid, char *dst, void *src, size_t size) {
+static void ptrace_read(pid_t pid, char *dst, void *src, size_t size) {
     size_t num_words = size / sizeof(long);
     assert(num_words * sizeof(long) == size);
 
+    long word;
     for(size_t i = 0; i < num_words; i++) {
-        long word = ptrace_d(PTRACE_PEEKTEXT, pid, src, NULL);
-        if(word < 0 && errno)
-            return false;
+        ptrace_d(PTRACE_PEEKTEXT, pid, src, &word);
         *(long*)dst = word;
         dst += sizeof(long);
         src += sizeof(long);
     }
-
-    return true;
 }
 
 static char* ptrace_read_str(pid_t pid, void *src, size_t size) {
@@ -32,16 +24,15 @@ static char* ptrace_read_str(pid_t pid, void *src, size_t size) {
         new_size += sizeof(long);
     assert(new_size < sizeof(buf));
 
-    if(!ptrace_read(pid, buf, src, new_size))
-        return NULL;
+    ptrace_read(pid, buf, src, new_size);
     buf[size] = 0;
     return buf;
 }
 
 long _ptrace_d(const char *line, long request, pid_t pid, void *addr, void *data) {
     long res = ptrace(request, pid, addr, data);
-    if(res < 0 && errno) {
-        fprintf(stderr, "%s: %s\n", line, strerror(errno));
+    if(res < 0) {
+        fprintf(stderr, "%s: %s\n", line, strerror(-res));
         exit(EXIT_FAILURE);
     }
     return res;
@@ -91,24 +82,22 @@ void print_nanocall_info(pid_t pid, cmd_entry *entry, struct user_regs_struct *r
             printf("%lld", arg);
             break;
         case ARG_ADDR:
-            printf("%p", (void*)arg);
+            printf("0x%08llx", arg);
             break;
         case ARG_STR:
             long long str_size = *(long long*)(base + fun_args_offsets[call->str_arg]);
-            printf("(%p)", (void*)arg);
-            fputc('"', stdout);
+            printf("(0x%08llx)\"", arg);
 
             char *str = ptrace_read_str(pid, (void*)arg, str_size);
-            assert(str != NULL);
             for(size_t i = 0; i < str_size; i++) {
                 switch(str[i]) {
                 case '\t': fputs("\\t", stdout);  break;
                 case '\n': fputs("\\n", stdout);  break;
                 case '\r': fputs("\\r", stdout);  break;
-                default:   fputc(str[i], stdout); break;
+                default:   putchar(str[i]); break;
                 }
             }
-            fputc('"', stdout);
+            putchar('"');
             break;
         }
 
@@ -119,12 +108,12 @@ void print_nanocall_info(pid_t pid, cmd_entry *entry, struct user_regs_struct *r
 }
 
 void print_regs(struct user_regs_struct *regs) {
-    printf("rdi: 0x%08lx\n"
-           "rsi: 0x%08lx\n"
-           "rdx: 0x%08lx\n"
-           "r10: 0x%08lx\n"
-           "r8:  0x%08lx\n"
-           "r9:  0x%08lx\n",
+    printf("rdi: 0x%08llx\n"
+           "rsi: 0x%08llx\n"
+           "rdx: 0x%08llx\n"
+           "r10: 0x%08llx\n"
+           "r8:  0x%08llx\n"
+           "r9:  0x%08llx\n",
            regs->rdi,
            regs->rsi,
            regs->rdx,

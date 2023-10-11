@@ -1,12 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <signal.h>
-#include <sys/wait.h>
-#include <sys/prctl.h>
-#include <sys/user.h>
-#include <sys/ptrace.h>
+#include "libc/lib.h"
 
 #include "table.h"
 #include "debug.h"
@@ -38,25 +30,29 @@ static inline void reset_regs(cmd_entry *entry) {
         *(long long*)(args + fun_args_offsets[i]) = regs_bak[i];
 }
 
+static inline void wait_or_die(void) {
+    int status;
+    wait(&status);
+    if(WIFEXITED(status))
+        exit(EXIT_SUCCESS);
+}
+
 static inline void call_interpreter(pid_t pid) {
     long backup = 0;
 
     for(;;) {
-        if(ptrace_d(PTRACE_SYSCALL, pid, NULL, NULL) < 0)
-            break;
-        wait(NULL);
+        ptrace_d(PTRACE_SYSCALL, pid, NULL, NULL);
+        wait_or_die();
 
-        if(ptrace_d(PTRACE_GETREGS, pid, NULL, &regs) < 0)
-            break;
+        ptrace_d(PTRACE_GETREGS, pid, NULL, &regs);
         unsigned long long rip_bak = regs.rip;
         Dprintf("\nstarted\n");
         print_regs(&regs);
 
         cmd_entry *entry = nano_lookup(regs.rip);
         if(!entry) {
-            if(ptrace_d(PTRACE_SYSCALL, pid, NULL, NULL) < 0)
-                break;
-            wait(NULL);
+            ptrace_d(PTRACE_SYSCALL, pid, NULL, NULL);
+            wait_or_die();
             continue;
         }
 
@@ -70,41 +66,31 @@ static inline void call_interpreter(pid_t pid) {
             entry->regs_proc(&regs);
         }
 
-        if(ptrace_d(PTRACE_SETREGS, pid, NULL, &regs) < 0)
-            break;
-
-        if(ptrace_d(PTRACE_SYSCALL, pid, NULL, NULL) < 0)
-            break;
-        wait(NULL);
+        ptrace_d(PTRACE_SETREGS, pid, NULL, &regs);
+        ptrace_d(PTRACE_SYSCALL, pid, NULL, NULL);
+        wait_or_die();
 
         if(entry->type == CMD_PROC) {
             int32_t offset = entry->proc_func - ((void*)regs.rip + 5);
             *(int32_t*)&call_code[1] = offset;
-            backup = ptrace_d(PTRACE_PEEKTEXT, pid, (void*)regs.rip, NULL);
-            if(backup < 0 && errno)
-                break;
+            ptrace_d(PTRACE_PEEKTEXT, pid, (void*)regs.rip, &backup);
             long patch = *(long*)call_code;
-            if(ptrace_d(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)patch) < 0)
-                break;
-            if(ptrace_d(PTRACE_CONT, pid, NULL, NULL) < 0)
-                break;
-            wait(NULL);
-            if(ptrace_d(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)backup) < 0)
-                break;
+            ptrace_d(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)patch);
+            ptrace_d(PTRACE_CONT, pid, NULL, NULL);
+            wait_or_die();
+            ptrace_d(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)backup);
         } else if(entry->type == CMD_REGS) {
             continue;
         }
 
-        if(ptrace_d(PTRACE_GETREGS, pid, NULL, &regs) < 0)
-            break;
+        ptrace_d(PTRACE_GETREGS, pid, NULL, &regs);
 
         Dprintf("\nreseted\n");
         reset_regs(entry);
         print_regs(&regs);
         if(entry->type == CMD_PROC)
             regs.rip = rip_bak;
-        if(ptrace_d(PTRACE_SETREGS, pid, NULL, &regs) < 0)
-            break;
+        ptrace_d(PTRACE_SETREGS, pid, NULL, &regs);
     }
 }
 
@@ -114,34 +100,32 @@ static inline void int3() {
 
 static char test_buf[128];
 
-int main() {
+void _start(void) {
     pid_t pid = fork();
     if(pid > 0) {
         // parent
-        wait(NULL);
+        wait_or_die();
 
-        sigset_t sigmask;
-        sigemptyset(&sigmask);
-        sigaddset(&sigmask, SIGCHLD);
+        sigset_t sigmask = 1 << (SIGCHLD - 1);
         if(sigprocmask(SIG_BLOCK, &sigmask, NULL) < 0)
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
 
         if(prctl(PR_SET_PTRACER, pid, 0, 0, 0) < 0)
-            return EXIT_FAILURE;
+            exit(EXIT_FAILURE);
         call_interpreter(pid);
-        return EXIT_SUCCESS;
+        exit(EXIT_SUCCESS);
     } else if(pid < 0) {
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     }
 
     // children
     if(ptrace_d(PTRACE_TRACEME, 0, NULL, NULL) < 0)
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
     int3();
 
     pid_t parent = getppid();
     if(ptrace_d(PTRACE_SEIZE, parent, NULL, NULL) < 0)
-        return EXIT_FAILURE;
+        exit(EXIT_FAILURE);
 
     nano_write(1, "What's your name?\n", 18);
     int len = nano_read(0, test_buf, sizeof(test_buf));
@@ -151,5 +135,6 @@ int main() {
 
     // TODO: printf with nano_write inside
     long res = nano_someproc(20);
-    printf("someproc: %li\n", res);
+    printf("someproc: %ld\n", res);
+    exit(EXIT_FAILURE);
 }

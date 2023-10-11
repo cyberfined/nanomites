@@ -1,9 +1,8 @@
 #pragma once
 
-#include <sys/ptrace.h>
+#include "libc/lib.h"
 
 #ifdef NDEBUG
-#include <sys/types.h>
 #include <sys/user.h>
 #include "table.h"
 
@@ -24,4 +23,3 @@ void print_regs(struct user_regs_struct *regs);
 #define Dprintf(...) do { } while(0)
 
 #endif
-

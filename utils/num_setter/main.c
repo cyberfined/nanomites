@@ -134,6 +134,7 @@ static inline bool patch_nanocalls(file_map *file, htable_t *offsets) {
         off_key.call_name_length = under - sym_name;
         offset_node *call_offset = (offset_node*)htable_lookup(offsets, (hnode_t*)&off_key);
         if(!call_offset) {
+            *under = '_';
             fprintf(stderr, "Failed to get index for %s nanocall\n", sym_name);
             goto error;
         }
