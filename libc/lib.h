@@ -187,42 +187,15 @@ size_t strlen(const char *s);
 int strcmp(const char *l, const char *r);
 void* memcpy(void *dest, const void *src, size_t n);
 void* memmove(void *dest, const void *src, size_t n);
-void* memset(void *s, int c, size_t n);
 char* strchr(const char *s, int c);
-char* strerror(int e);
-
-typedef __builtin_va_list va_list;
-#define va_start(v,l)   __builtin_va_start(v,l)
-#define va_end(v)       __builtin_va_end(v)
-#define va_arg(v,l)     __builtin_va_arg(v,l)
-#define va_copy(d,s)    __builtin_va_copy(d,s)
 
 typedef struct FILE {
     int    fd;
-    char   rbuf[4096];
-    char   wbuf[4096];
-    size_t r_offset;
-    size_t r_size;
+    char   buf[4096];
+    size_t offset;
+    size_t size;
 } FILE;
 extern FILE *stdin;
-extern FILE *stdout;
-extern FILE *stderr;
-int putchar(int c);
-size_t fwrite(const void* ptr, size_t size, size_t nmemb, FILE *f);
 char* fgets(char *buf, size_t size, FILE *f);
-int fputs(const char *s, FILE *f);
-int puts(const char *s);
-int vfprintf(FILE *f, const char *format, va_list ap);
-__attribute__ ((format (printf, 2, 3)))
-int fprintf(FILE *f, const char *format, ...);
-__attribute__ ((format (printf, 1, 2)))
-int printf(const char *format, ...);
-
-#define assert(c)  while (!(c)) __builtin_unreachable()
-#define offsetof(type, member) __builtin_offsetof(type, member)
-
-#define _ERRNO_H
-#include <bits/errno.h>
-#undef _ERRNO_H
 
 #endif //_LIB_H

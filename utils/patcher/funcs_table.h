@@ -5,9 +5,8 @@
 #include <stddef.h>
 
 typedef struct {
-    long long addr;
-    uint32_t  size;
-    uint8_t   data[16];
+    uint64_t addr;
+    uint8_t  data[8];
 } func_node;
 
 typedef struct {
@@ -19,5 +18,5 @@ typedef struct {
 
 funcs_table* funcs_create(size_t max_nodes);
 size_t get_func_table_size(size_t max_nodes);
-bool funcs_insert(funcs_table *funcs, long long addr, uint32_t size, void *data);
+bool funcs_insert(funcs_table *funcs, uint64_t addr, void *data);
 void funcs_free(funcs_table *funcs);

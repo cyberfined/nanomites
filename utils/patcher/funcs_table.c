@@ -66,7 +66,7 @@ funcs_table* funcs_create(size_t max_nodes) {
     return funcs;
 }
 
-bool funcs_insert(funcs_table *funcs, long long addr, uint32_t size, void *data) {
+bool funcs_insert(funcs_table *funcs, uint64_t addr, void *data) {
     int cur, step, nstep;
     if(funcs->num_nodes == funcs->max_nodes) {
         fprintf(stderr, "Max nodes number is %lu\n", funcs->max_nodes);
@@ -83,7 +83,6 @@ bool funcs_insert(funcs_table *funcs, long long addr, uint32_t size, void *data)
         func_node *cur_node = &funcs->nodes[cur];
         if(!cur_node->addr) {
             cur_node->addr = addr;
-            cur_node->size = size;
             memcpy(&cur_node->data, data, sizeof(cur_node->data));
             funcs->num_nodes++;
             is_inserted = true;
