@@ -14,5 +14,6 @@ linker.ld
 libc/libc.a
 engine/AddRoundKey.c
 engine/table.inc
+!engine/linker.ld
 utils/gen-add-round-key/dist-newstyle
 !utils/gen-add-round-key/LICENSE
