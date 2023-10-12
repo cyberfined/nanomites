@@ -332,44 +332,11 @@ typedef struct {
     uint8_t  key[240];
 } func_data;
 
-static void dump_key_iv(elf_t *elf, Elf64_Sym *func, func_data *data) {
-    char buf[512];
-
-    snprintf(buf, sizeof(buf), "../dumps/%s_key", &elf->sym_names[func->st_name]);
-    int fd = open(buf, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if(fd < 0) {
-        perror("dump_key_iv (open)");
-        return;
-    }
-
-    if(!write_all(fd, data->key, sizeof(data->key))) {
-        close(fd);
-        return;
-    }
-    close(fd);
-
-    snprintf(buf, sizeof(buf), "../dumps/%s_iv", &elf->sym_names[func->st_name]);
-    fd = open(buf, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if(fd < 0) {
-        perror("dump_key_iv (open)");
-        return;
-    }
-
-    if(!write_all(fd, data->iv, sizeof(data->iv))) {
-        close(fd);
-        return;
-    }
-    close(fd);
-    return;
-}
-
 static void encrypt_function(elf_t *elf, Elf64_Sym *func, func_data *data) {
     getrandom(data->key, sizeof(data->key), 0);
     getrandom(data->iv, sizeof(data->iv), 0);
     data->addr = func->st_value;
     data->size = roundup(func->st_size, AES_BLOCKLEN);
-
-    dump_key_iv(elf, func, data);
 
     Elf64_Shdr *func_shdr = &elf->shdrs[func->st_shndx];
     uint8_t *func_start = elf->mem + func_shdr->sh_offset +

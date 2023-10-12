@@ -38,7 +38,7 @@ utils/num_setter/num_setter: FORCE
 utils/patcher/patcher: FORCE
 	$(MAKE) $(MFLAGS) -C utils/patcher
 utils/gen-add-round-key/build: FORCE
-	@test "$(shell cd utils/gen-add-round-key && cabal build)" = "Up to date" \
+	@test "$(shell cd utils/gen-add-round-key && cabal build | tee /dev/fd/2)" = "Up to date" \
 		|| { touch utils/gen-add-round-key/build; } \
 		&& { test -f utils/gen-add-round-key/build || \
 		touch utils/gen-add-round-key/build; }
