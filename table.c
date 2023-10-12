@@ -1,5 +1,4 @@
 #include "table.h"
-#include <stdio.h>
 
 static long someproc(long arg) {
     return arg * 20;

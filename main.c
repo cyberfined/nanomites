@@ -9,6 +9,7 @@ static uint8_t call_code[] = {0xe8, 0x00, 0x00, 0x00, 0x00, 0xcc, 0x00, 0x00};
 
 static long long regs_bak[6];
 
+__attribute__((always_inline))
 static inline void prepare_regs(cmd_entry *entry) {
     void *args = &regs;
     long long src[6];
@@ -24,12 +25,14 @@ static inline void prepare_regs(cmd_entry *entry) {
         regs.orig_rax = 39;
 }
 
+__attribute__((always_inline))
 static inline void reset_regs(cmd_entry *entry) {
     void *args = &regs;
     for(int i = 0; i < entry->num_args; i++)
         *(long long*)(args + fun_args_offsets[i]) = regs_bak[i];
 }
 
+__attribute__((always_inline))
 static inline void wait_or_die(void) {
     int status;
     wait(&status);
@@ -37,6 +40,7 @@ static inline void wait_or_die(void) {
         exit(EXIT_SUCCESS);
 }
 
+__attribute__((always_inline))
 static inline void call_interpreter(pid_t pid) {
     long backup = 0;
 
@@ -94,6 +98,7 @@ static inline void call_interpreter(pid_t pid) {
     }
 }
 
+__attribute__((always_inline))
 static inline void int3() {
     __asm__ __volatile__ ("int3");
 }
@@ -136,5 +141,5 @@ void _start(void) {
     // TODO: printf with nano_write inside
     long res = nano_someproc(20);
     printf("someproc: %ld\n", res);
-    exit(EXIT_FAILURE);
+    nano_exit(EXIT_FAILURE);
 }

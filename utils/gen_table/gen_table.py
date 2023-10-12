@@ -90,7 +90,7 @@ class Command:
         argsDef = [f"{t.strType()} a{i}" for i, t in enumerate(self.argsTypes)]
         argsDef = ", ".join(argsDef)
 
-        yield f"static inline {self.retType.strType()} nano_{self.title}({argsDef}) {{"
+        yield f"__attribute__((always_inline))\nstatic inline {self.retType.strType()} nano_{self.title}({argsDef}) {{"
         if self.retType is not ArgType.VOID:
             yield  "    long ret;"
 
@@ -140,9 +140,13 @@ class Command:
         yield "},"
 
 class TableGen:
+    TABLE_SIZES = [13, 31, 61, 103, 229, 523, 1093, 2239, 4519, 9043, 18121, 36343,
+                   72673, 145513, 291043, 582139, 1164433]
+
     def __init__(self, includePath, commands):
         self.includePath = includePath
         self.commands = commands
+        self.tableSize = next(s for s in self.TABLE_SIZES if s >= len(self.commands))
         random.shuffle(self.commands)
         self.entriesOffsets = []
         self.parseSycallNums()
@@ -167,12 +171,10 @@ class TableGen:
             cmd.number = callNums[cmd.title]
 
     def generateHeaderFile(self):
-        header = """\
+        header = f"""\
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
+#include "libc/lib.h"
 #include <sys/user.h>
 
 #define CMD_SYSCALL 1337
@@ -181,52 +183,54 @@ class TableGen:
 
 typedef void (*cmd_regs_proc)(struct user_regs_struct*);
 
-typedef struct {
+typedef struct {{
     uint32_t type;
-    union {
-        struct {
+    union {{
+        struct {{
             uint16_t num_args;
             uint16_t args_offsets[6];
-            union {
+            union {{
                 uint16_t number;
                 void     *proc_func;
-            };
-        };
+            }};
+        }};
         cmd_regs_proc regs_proc;
-    };
-} cmd_entry;
+    }};
+}} cmd_entry;
 
-typedef struct {
+typedef struct {{
     long long addr;
     void      *nanocall;
-} nanocall_node;
+}} nanocall_node;
 
 extern cmd_entry cmd_table[];
 extern uint16_t fun_args_offsets[];
-extern nanocall_node nanocalls_table[31];
+extern nanocall_node nanocalls_table[{self.tableSize}];
 
-static inline uint32_t jenkins_hash_func(long long addr) {
+__attribute__((always_inline))
+static inline uint32_t jenkins_hash_func(long long addr) {{
     size_t i = 0;
     uint32_t hash = 0;
     uint8_t *key = (uint8_t*)&addr;
-    while (i != sizeof(addr)) {
+    while (i != sizeof(addr)) {{
         hash += key[i++];
         hash += hash << 10;
         hash ^= hash >> 6;
-    }
+    }}
     hash += hash << 3;
     hash ^= hash >> 11;
     hash += hash << 15;
     return hash;
-}
+}}
 
-static inline void* nano_lookup(long long addr) {
+__attribute__((always_inline))
+static inline void* nano_lookup(long long addr) {{
     uint32_t hash = jenkins_hash_func(addr);
     int cur = hash % (sizeof(nanocalls_table)/sizeof(*nanocalls_table));
     int step = hash % (sizeof(nanocalls_table)/sizeof(*nanocalls_table) - 2) + 1;
     int nstep = step;
 
-    for(size_t i = 0; i < sizeof(nanocalls_table)/sizeof(*nanocalls_table); i++) {
+    for(size_t i = 0; i < sizeof(nanocalls_table)/sizeof(*nanocalls_table); i++) {{
         nanocall_node *cur_node = &nanocalls_table[cur];
         if(!cur_node->addr)
             break;
@@ -234,10 +238,10 @@ static inline void* nano_lookup(long long addr) {
             return cur_node->nanocall;
         cur = (hash + nstep) % (sizeof(nanocalls_table)/sizeof(*nanocalls_table));
         nstep += step;
-    }
+    }}
 
     return NULL;
-}
+}}
 """
         return '\n'.join([header, self.generateMacro(), self.generateFuncs()])
 
@@ -271,7 +275,7 @@ static inline void* nano_lookup(long long addr) {
             for entry in cmd.tableEntries():
                 table.append("    " + entry)
         table.append("};\n")
-        table.append("nanocall_node nanocalls_table[31] = {")
+        table.append(f"nanocall_node nanocalls_table[{self.tableSize}] = {{")
         table.append("    {.addr = 0x1, .nanocall = (void*)0x1}")
         table.append("};\n")
         return '\n'.join(table)
