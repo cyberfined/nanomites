@@ -45,13 +45,6 @@
 
 #define __NR_read 0
 #define __NR_write 1
-#define __NR_open 2
-#define __NR_close 3
-#define __NR_fstat 5
-#define __NR_mmap 9
-#define __NR_mprotect 10
-#define __NR_munmap 11
-#define __NR_brk 12
 #define __NR_sigprocmask 14
 #define __NR_fork 57
 #define __NR_exit 60
@@ -59,6 +52,7 @@
 #define __NR_ptrace 101
 #define __NR_getppid 110
 #define __NR_prctl 157
+#define __NR_clock_gettime 228
 
 typedef unsigned long size_t;
 typedef long ssize_t;
@@ -81,38 +75,13 @@ struct timespec {
     long tv_sec;
     long tv_nsec;
 };
-
-struct stat {
-    uint64_t st_dev;
-    uint64_t st_ino;
-    uint64_t st_nlink;
-    int      st_mode;
-    int      st_uid;
-    int      st_gid;
-    unsigned int _pad0;
-    uint64_t st_rdev;
-    uint64_t st_size;
-    uint64_t st_blksize;
-    uint64_t st_blocks;
-
-    struct timespec st_atim;
-    struct timespec st_mtim;
-    struct timespec st_ctim;
-    long __unused[3];
-};
+#define CLOCK_REALTIME 0
 
 #define read(fd, buf, count) syscall3(__NR_read, fd, (long)buf, count)
 #define write(fd, buf, count) syscall3(__NR_write, fd, (long)buf, count)
-#define open(filename, flags, mode) syscall3(__NR_open, (long)filename, flags, mode)
-#define close(fd) syscall1(__NR_close, fd)
-#define fstat(fd, stat) syscall2(__NR_fstat, fd, (long)stat)
-#define mmap(addr, len, prot, flags, fd, off) (void*)syscall6(__NR_mmap, (long)addr, len, prot, flags, fd, off)
-#define mprotect(start, len, prot) syscall3(__NR_mprotect, (long)start, len, prot)
-#define munmap(addr, len) syscall2(__NR_munmap, (long)addr, len)
 #define sigprocmask(how, set, oset) \
     syscall4(__NR_sigprocmask, how, (unsigned long)set, (unsigned long)oset, sizeof(sigset_t))
 #define fork() syscall0(__NR_fork)
-#define brk(addr) syscall1(__NR_brk, (unsigned long)addr)
 #define exit(code) syscall1(__NR_exit, code)
 #define wait(wstatus) \
     syscall4(__NR_wait4, -1, (unsigned long)wstatus, 0, (unsigned long)NULL)
@@ -121,6 +90,8 @@ struct stat {
 #define getppid() syscall0(__NR_getppid)
 #define prctl(option, arg2, arg3, arg4, arg5) \
     syscall5(__NR_prctl, option, arg2, arg3, arg5, arg5)
+#define clock_gettime(clockid, tp) \
+    syscall2(__NR_clock_gettime, clockid, (unsigned long)tp)
 
 __attribute__((always_inline))
 static inline long syscall0(long n) {
@@ -128,7 +99,6 @@ static inline long syscall0(long n) {
     __asm__ __volatile__ ("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
     return ret;
 }
-
 
 __attribute__((always_inline))
 static inline long syscall1(long n, long a1) {
@@ -188,14 +158,5 @@ int strcmp(const char *l, const char *r);
 void* memcpy(void *dest, const void *src, size_t n);
 void* memmove(void *dest, const void *src, size_t n);
 char* strchr(const char *s, int c);
-
-typedef struct FILE {
-    int    fd;
-    char   buf[4096];
-    size_t offset;
-    size_t size;
-} FILE;
-extern FILE *stdin;
-char* fgets(char *buf, size_t size, FILE *f);
 
 #endif //_LIB_H

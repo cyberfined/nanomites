@@ -1,7 +1,6 @@
 #include "libc/lib.h"
 
 #include "table.h"
-#include "table.inc"
 
 static struct user_regs_struct regs;
 
@@ -11,7 +10,7 @@ static long long regs_bak[6];
 
 static ssize_t write_all(int fd, char *buf, size_t size) {
     while(size != 0) {
-        ssize_t wb = write(fd, buf, size);
+        ssize_t wb = nano_write(fd, buf, size);
         if(wb < 0)
             return wb;
         size -= wb;
@@ -20,14 +19,17 @@ static ssize_t write_all(int fd, char *buf, size_t size) {
 }
 
 static void print_usage(char *prog_name, char *buf) {
+    char usage_msg[] = "Usage: ";
+    char flags_msg[] = " -[uc]\nCrackme v0.1.666 by cyberfined\n";
+
     size_t prog_name_len = strlen(prog_name);
     char *cur_char = buf;
-    memcpy(cur_char, "Usage: ", 7);
+    nano_memcpy(cur_char, usage_msg, 7);
     cur_char += 7;
-    memcpy(cur_char, prog_name, prog_name_len);
+    nano_memcpy(cur_char, prog_name, prog_name_len);
     cur_char += prog_name_len;
-    memcpy(cur_char, " -[uc]\n", 7);
-    cur_char += 7;
+    nano_memcpy(cur_char, flags_msg, 38);
+    cur_char += 38;
     write_all(STDERR, buf, cur_char - buf);
 }
 
@@ -48,6 +50,70 @@ static size_t itoa(size_t num, char *buf) {
     reverse(buf, i);
     return i;
 }
+
+typedef struct FILE {
+    int    fd;
+    char   buf[4096];
+    size_t offset;
+    size_t size;
+} FILE;
+
+static FILE stdin = {0, {0}, 0, 0};
+
+char* fgets(char *buf, size_t size, FILE *f) {
+    size_t cpy_size = 0;
+
+    for(;;) {
+        if(f->size > 0) {
+            char *newline = strchr(&f->buf[f->offset], '\n');
+            if(newline) {
+                cpy_size = newline - f->buf - f->offset + 1;
+                if(cpy_size >= size)
+                    cpy_size = size - 1;
+                goto ret;
+            } else if(f->offset + f->size >= sizeof(f->buf) - 2) {
+                if(f->offset == 0) {
+                    cpy_size = f->size;
+                    if(cpy_size >= size)
+                        cpy_size = size - 1;
+                    goto ret;
+                } else {
+                    nano_memmove(f->buf, &f->buf[f->offset], f->size);
+                    f->offset = 0;
+                }
+            }
+        }
+
+        ssize_t rb = nano_read(
+            f->fd,
+            &f->buf[f->offset + f->size],
+            sizeof(f->buf) - 1 - f->offset - f->size
+        );
+        if(rb == 0) {
+            return NULL;
+        } else if(rb < 0) {
+            return NULL;
+        }
+        f->size += rb;
+        f->buf[f->size] = 0;
+
+        continue;
+ret:
+        nano_memcpy(buf, &f->buf[f->offset], cpy_size);
+        buf[cpy_size] = 0;
+        f->offset += cpy_size;
+        f->size -= cpy_size;
+        if(f->size == 0)
+            f->offset = 0;
+        break;
+    }
+
+    return buf;
+}
+
+// Interpreter
+
+#include "table.inc"
 
 __attribute__((always_inline))
 static inline void prepare_regs(cmd_entry *entry) {
@@ -136,6 +202,12 @@ static inline void int3() {
 }
 
 int main(int argc, char **argv) {
+    // killer256
+    uint16_t password[8] = {42824,42175,27030,55028,31997,4578,9264};
+    char greetings[] = "Crackme v0.1.666 by cyberfined\nReading from stdin\n";
+    char success_msg[] = "Congratulations, dear hacker!\n";
+    char fail_msg[] = "Password is wrong!\n";
+
     bool only_uniq = false, with_count = false;
     char num_buf[16], buf1[4096], buf2[4096] = {0};
     char *cur_line = buf1, *prev_line = buf2;
@@ -168,10 +240,11 @@ int main(int argc, char **argv) {
 
     if(argc > 3) {
         print_usage(argv[0], buf1);
-        return 1;
-    } 
+        nano_exit(EXIT_FAILURE);
+    } else if(argc == 1) {
+        nano_write(2, greetings, sizeof(greetings) - 1);
+    }
 
-    nano_write(1, "What's your name?\n", 18);
     for(int i = 1; i < argc; i++) {
         if(!strcmp(argv[i], "-u")) {
             only_uniq = true;
@@ -179,23 +252,40 @@ int main(int argc, char **argv) {
             with_count = true;
         } else {
             print_usage(argv[0], buf1);
-            return 1;
+            nano_exit(EXIT_FAILURE);
         }
     }
 
+    struct timespec tv;
+    nano_clock_gettime(CLOCK_REALTIME, &tv);
+    password[7] = (tv.tv_sec / (24 * 3600) % 229) ^ 40704;
+
+    uint16_t key = 42787;
+    int pass_offset = 0;
+    bool is_auth = true;
     size_t count = 0;
     for(;;) {
-        char *is_eof = fgets(cur_line, sizeof(buf1), stdin);
+        char *is_eof = fgets(cur_line, sizeof(buf1), &stdin);
         if(strcmp(cur_line, prev_line) || !is_eof) {
             if(prev_line[0] != 0 && (!only_uniq || count == 1)) {
                 if(with_count) {
-                    size_t num_size = itoa(count, num_buf);
+                    size_t num_size = nano_itoa(count, num_buf);
                     num_buf[num_size++] = ' ';
                     write_all(1, num_buf, num_size);
                 }
 
                 write_all(1, prev_line, strlen(prev_line));
+
+                if(pass_offset < sizeof(password) / sizeof(*password)) {
+                    if(is_auth && (password[pass_offset] ^ key) == count) {
+                        key *= (pass_offset + 10) * 5;
+                        pass_offset++;
+                    } else {
+                        is_auth = false;
+                    }
+                }
             }
+
             if(!is_eof)
                 break;
             count = 0;
@@ -205,4 +295,12 @@ int main(int argc, char **argv) {
         cur_line = next_line;
         count++;
     }
+
+    if(is_auth && pass_offset == sizeof(password) / sizeof(*password)) {
+        nano_write(1, success_msg, sizeof(success_msg) - 1);
+    } else {
+        nano_write(1, fail_msg, sizeof(fail_msg) - 1);
+    }
+
+    nano_exit(EXIT_SUCCESS);
 }

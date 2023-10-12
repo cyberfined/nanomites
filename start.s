@@ -8,9 +8,4 @@ _start:
     movq %rbp, %rsi
     addq $24, %rsi
     callq main
-
-    # Exit
-    movq %rax, %rdi
-    movq $60, %rax
-    syscall
 .size _start,.-_start

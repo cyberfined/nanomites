@@ -33,17 +33,20 @@ class Register(Enum):
         return list(Register).index(self)
 
 class ArgType(Enum):
-    INT  = 0
-    ADDR = 1
-    VOID = 2
+    INT    = 0
+    ADDR   = 1
+    VOID   = 2
+    SIZE_T = 3
 
     def strType(self):
         if self is ArgType.INT:
             return "long"
         elif self is ArgType.ADDR:
             return "void*"
-        else:
+        elif self is ArgType.VOID:
             return "void"
+        else:
+            return "size_t"
 
 class CmdType(Enum):
     SYSCALL = 0
@@ -140,7 +143,7 @@ class Command:
         yield "},"
 
 class TableGen:
-    TABLE_SIZES = [13, 31, 61, 103, 229, 523, 1093, 2239, 4519, 9043, 18121, 36343,
+    TABLE_SIZES = [31, 61, 103, 229, 523, 1093, 2239, 4519, 9043, 18121, 36343,
                    72673, 145513, 291043, 582139, 1164433]
 
     def __init__(self, includePath, commands):
