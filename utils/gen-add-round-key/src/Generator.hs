@@ -298,20 +298,13 @@ randomExprForXor rnd withRound destWord = do
     numOps <- randomR (2, 5)
     ops <- replicateM (numOps - 1) (randomChoice [Add, Mul, Rotl, Rotr, Xor])
     partialExpr <- randomPartialExpr ops
-    partialResult <- runExpr32 Nothing Nothing (Just rnd) partialExpr
+    partialResult <- runExpr32 rnd partialExpr
     (lastOp, lastOperand) <- randomLastOperand partialResult [Add, Mul, Xor]
     pure (Binop lastOp partialExpr lastOperand)
   where randomPartialExpr :: [Binop] -> GenM Expr
-        randomPartialExpr (op : ops@(_:_)) = do
+        randomPartialExpr ops@(op : _) = do
             (lOperand, isRoundUsed) <- randomOperand op (not withRound)
-            (rOperand, isRoundUsed') <- randomOperand op isRoundUsed
-            randomPartialExpr' ops isRoundUsed' (Binop op lOperand rOperand)
-        randomPartialExpr [op] = do
-            (fstOperand, isRoundUsed) <- randomOperand op (not withRound)
-            sndOperand <- if isRoundUsed
-                             then fst <$> randomOperand op True
-                             else pure (Var VarRound)
-            pure (Binop op fstOperand sndOperand)
+            randomPartialExpr' ops isRoundUsed lOperand
         randomPartialExpr _ = error "Never executed"
 
         randomPartialExpr' :: [Binop] -> Bool -> Expr -> GenM Expr
@@ -385,12 +378,12 @@ lookupVariable var state = case Interpreter.lookupVariable var state of
     Left err  -> lift $ throwE err
     Right val -> pure val
 
-runExpr32 :: Maybe AesState -> Maybe Address -> Maybe Round -> Expr -> GenM Word32
-runExpr32 aesState addr rnd expr = runExpr aesState addr rnd expr >>= \case
+runExpr32 :: Round -> Expr -> GenM Word32
+runExpr32 rnd expr = runExpr rnd expr >>= \case
     Val32 w32 -> pure w32
     Val64 w64 -> pure (fromIntegral w64)
 
-runExpr :: Maybe AesState -> Maybe Address -> Maybe Round -> Expr -> GenM Value
-runExpr aesState addr rnd expr = case runInterpreterExpr aesState addr rnd expr of
+runExpr :: Round -> Expr -> GenM Value
+runExpr rnd expr = case runInterpreterExpr rnd expr of
     Left err  -> lift $ throwE err
     Right res -> pure res

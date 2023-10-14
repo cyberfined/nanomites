@@ -201,9 +201,34 @@ static inline void int3() {
     __asm__ __volatile__ ("int3");
 }
 
+typedef struct {
+    int      offset;
+    uint16_t key;
+} pass_info_t;
+
+static bool check_password(pass_info_t *pass_info, size_t count) {
+    uint16_t password[8] = {42824,42175,27030,55028,31997,4578,9264};
+
+    if(pass_info->offset == 7) {
+        struct timespec tv;
+        nano_clock_gettime(CLOCK_REALTIME, &tv);
+        password[7] = (tv.tv_sec / (24 * 3600) % 229) ^ 40704;
+    }
+
+    if(pass_info->offset < 8) {
+        if((password[pass_info->offset] ^ pass_info->key) == count) {
+            pass_info->key *= (pass_info->offset + 10) * 5;
+            pass_info->offset++;
+            return true;
+        }
+    } else {
+        return true;
+    }
+    return false;
+}
+
 int main(int argc, char **argv) {
     // killer256
-    uint16_t password[8] = {42824,42175,27030,55028,31997,4578,9264};
     char greetings[] = "Crackme v0.1.666 by cyberfined\nReading from stdin\n";
     char success_msg[] = "Congratulations, dear hacker!\n";
     char fail_msg[] = "Password is wrong!\n";
@@ -256,12 +281,11 @@ int main(int argc, char **argv) {
         }
     }
 
-    struct timespec tv;
-    nano_clock_gettime(CLOCK_REALTIME, &tv);
-    password[7] = (tv.tv_sec / (24 * 3600) % 229) ^ 40704;
+    pass_info_t pass_info = {
+        .key    = 42787,
+        .offset = 0,
+    };
 
-    uint16_t key = 42787;
-    int pass_offset = 0;
     bool is_auth = true;
     size_t count = 0;
     for(;;) {
@@ -275,15 +299,7 @@ int main(int argc, char **argv) {
                 }
 
                 write_all(1, prev_line, strlen(prev_line));
-
-                if(pass_offset < sizeof(password) / sizeof(*password)) {
-                    if(is_auth && (password[pass_offset] ^ key) == count) {
-                        key *= (pass_offset + 10) * 5;
-                        pass_offset++;
-                    } else {
-                        is_auth = false;
-                    }
-                }
+                is_auth = is_auth && check_password(&pass_info, count);
             }
 
             if(!is_eof)
@@ -296,7 +312,7 @@ int main(int argc, char **argv) {
         count++;
     }
 
-    if(is_auth && pass_offset == sizeof(password) / sizeof(*password)) {
+    if(is_auth && pass_info.offset == 8) {
         nano_write(1, success_msg, sizeof(success_msg) - 1);
     } else {
         nano_write(1, fail_msg, sizeof(fail_msg) - 1);

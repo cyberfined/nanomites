@@ -62,24 +62,10 @@ runInterpreter (AesState w1 w2 w3 w4) (Address addr) (Round rnd) stmts = result
 runInterpreterM :: Traversable t => t Stmt -> InterpretM ()
 runInterpreterM = mapM_ runStmt
 
-runInterpreterExpr :: Maybe AesState
-                   -> Maybe Address
-                   -> Maybe Round
-                   -> Expr
-                   -> Either InterpretError Value
-runInterpreterExpr mAesState mAddr mRnd expr =
-    runExcept (evalStateT (runExpr expr) initState)
+runInterpreterExpr :: Round -> Expr -> Either InterpretError Value
+runInterpreterExpr (Round rnd) expr = runExcept (evalStateT (runExpr expr) initState)
   where initState = State initVariables
-        initVariables = HashMap.fromList $  aesStateVariables
-                                         ++ addrVariable
-                                         ++ roundVariable
-        aesStateVariables = case mAesState of
-            Nothing -> []
-            Just (AesState w1 w2 w3 w4) ->
-                let f idx w = (VarState idx, Val32 w)
-                in zipWith f [0..] [w1, w2, w3, w4]
-        addrVariable = maybe [] (\(Address addr) -> [(VarAddress, Val64 addr)]) mAddr
-        roundVariable = maybe [] (\(Round rnd) -> [(VarRound, Val32 rnd)]) mRnd
+        initVariables = HashMap.fromList [(VarRound, Val32 rnd)]
 
 runStmt :: Stmt -> InterpretM ()
 runStmt = \case
