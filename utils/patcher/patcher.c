@@ -235,6 +235,7 @@ static bool infect_engine(elf_t *elf, elf_t *engine, const char *patched_executa
         text_section->sh_size += rounded_size;
     }
 
+    elf->phdrs[0].p_flags = PF_X | PF_W | PF_R;
     elf->phdrs[0].p_vaddr -= rounded_size;
     elf->phdrs[0].p_paddr -= rounded_size;
     elf->phdrs[0].p_filesz += rounded_size;
