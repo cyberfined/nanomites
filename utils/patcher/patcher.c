@@ -352,8 +352,7 @@ static void encrypt_function(elf_t *elf, Elf64_Sym *func, func_data *data) {
 
 static char** prepare_generate_add_round_key_argv(
     func_data *funcs_data,
-    size_t num_functions,
-    char **_strings
+    size_t num_functions
 ) {
     char **argv = NULL, *strings = NULL;
     size_t argc = 4 * (num_functions + 1);
@@ -391,7 +390,6 @@ static char** prepare_generate_add_round_key_argv(
         strings_offset++;
     }
 
-    *_strings = strings;
     return argv;
 error:
     perror("prepare_generate_add_round_key_argv (malloc)");
@@ -413,8 +411,8 @@ static bool generate_add_round_key(
 
     pid_t pid = fork();
     if (pid == 0) {
-        char **argv = NULL, *strings = NULL;
-        argv = prepare_generate_add_round_key_argv(funcs_data, num_functions, &strings);
+        char **argv = NULL;
+        argv = prepare_generate_add_round_key_argv(funcs_data, num_functions);
         if(!argv)
             exit(EXIT_FAILURE);
 
