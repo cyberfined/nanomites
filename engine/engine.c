@@ -350,7 +350,7 @@ static inline void decrypt_function(func_node *func) {
     AES_CBC_decrypt_buffer(data);
 }
 
-void engine(void *a1, void *a2, void *a3, void *a4, void *a5, void *a6) {
+void* engine(void *a1, void *a2, void *a3, void *a4, void *a5, void *a6) {
     void *ret_addr;
     __asm__ __volatile__ ("mov 16(%%rbp), %%rax" : "=a"(ret_addr) : : "memory");
 
@@ -376,5 +376,5 @@ void engine(void *a1, void *a2, void *a3, void *a4, void *a5, void *a6) {
         decrypt_function(prev_caller_info);
 
     __asm__ __volatile__ ("mov %%rax, 8(%%rbp)" : : "a"(ret_addr) : "memory");
-    __asm__ __volatile__ ("" : : "a"(res));
+    return res;
 }
